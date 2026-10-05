@@ -1,0 +1,211 @@
+#!/usr/bin/env bash
+
+# ─────────────────────────────────────────────
+#  MUSIC PLAYER — playerctl + Kitty
+# ─────────────────────────────────────────────
+
+BLUE='\033[38;5;75m'
+WHITE='\033[97m'
+GRAY='\033[90m'
+RESET='\033[0m'
+BOLD='\033[1m'
+
+ART="/tmp/music-cover.png"
+
+get_metadata() {
+    STATUS=$(playerctl status 2>/dev/null)
+    TITLE=$(playerctl metadata --format '{{title}}' 2>/dev/null)
+    ARTIST=$(playerctl metadata --format '{{artist}}' 2>/dev/null)
+    ALBUM=$(playerctl metadata --format '{{album}}' 2>/dev/null)
+    ARTURL=$(playerctl metadata --format '{{mpris:artUrl}}' 2>/dev/null)
+    POSITION=$(playerctl position 2>/dev/null)
+    LENGTH=$(playerctl metadata --format '{{mpris:length}}' 2>/dev/null)
+}
+
+format_time() {
+    local SEC=$1
+
+    if [[ -z "$SEC" || "$SEC" == "0" ]]; then
+        echo "00:00"
+        return
+    fi
+
+    printf "%02d:%02d" \
+        $((SEC / 60)) \
+        $((SEC % 60))
+}
+
+download_cover() {
+    [[ -z "$ARTURL" ]] && return
+
+    if [[ "$ARTURL" == file://* ]]; then
+        cp "${ARTURL#file://}" "$ART" 2>/dev/null
+
+    elif [[ "$ARTURL" == http://* || "$ARTURL" == https://* ]]; then
+        curl -L -s "$ARTURL" -o "$ART"
+    fi
+}
+
+draw_cover() {
+    [[ ! -f "$ART" ]] && return
+
+    kitty +kitten icat \
+        --silent \
+        --transfer-mode=stream \
+        --place 28x14@3x3 \
+        "$ART" 2>/dev/null
+}
+
+cleanup() {
+    printf '\033[?25h'
+    kitty +kitten icat --clear 2>/dev/null
+    printf '\033[2J\033[H'
+    exit
+}
+
+trap cleanup INT TERM EXIT
+
+# Hide cursor
+printf '\033[?25l'
+
+# Initial screen
+printf '\033[2J\033[H'
+
+LAST_SONG=""
+
+while true; do
+
+    get_metadata
+
+    # ─────────────────────────────────────────
+    # Detect song change
+    # ─────────────────────────────────────────
+
+    SONG_ID="${TITLE}|${ARTIST}|${ARTURL}"
+
+    if [[ "$SONG_ID" != "$LAST_SONG" ]]; then
+
+        LAST_SONG="$SONG_ID"
+
+        # Clear previous artwork
+        kitty +kitten icat --clear 2>/dev/null
+
+        # Download new artwork
+        download_cover
+
+        # Draw artwork
+        draw_cover
+
+        # ─────────────────────────────────────
+        # Static UI
+        # ─────────────────────────────────────
+
+        printf '\033[3;35H'
+        echo -e "${BLUE}${BOLD}󰎈  NOW PLAYING${RESET}"
+
+        printf '\033[5;35H'
+        echo -e "\033[K${WHITE}${BOLD}${TITLE:-Unknown Title}${RESET}"
+
+        printf '\033[6;35H'
+        echo -e "\033[K${GRAY}${ARTIST:-Unknown Artist}${RESET}"
+
+        printf '\033[7;35H'
+        echo -e "\033[K${GRAY}${ALBUM:-Unknown Album}${RESET}"
+
+        printf '\033[12;35H'
+        echo -e "\033[K${GRAY}󰒮 [b]     ${WHITE}󰏤 [p]${GRAY}     󰒭 [n]${RESET}"
+    fi
+
+    # ─────────────────────────────────────────
+    # Time
+    # ─────────────────────────────────────────
+
+    POS_SEC=${POSITION%.*}
+    LEN_SEC=$((LENGTH / 1000000))
+
+    CURRENT=$(format_time "$POS_SEC")
+    TOTAL=$(format_time "$LEN_SEC")
+
+    if [[ "$LEN_SEC" -gt 0 ]]; then
+        PERCENT=$((POS_SEC * 100 / LEN_SEC))
+
+        if (( PERCENT > 100 )); then
+            PERCENT=100
+        fi
+    else
+        PERCENT=0
+    fi
+
+    # ─────────────────────────────────────────
+    # Progress bar
+    # ─────────────────────────────────────────
+
+    WIDTH=28
+
+    FILLED=$((WIDTH * PERCENT / 100))
+    EMPTY=$((WIDTH - FILLED))
+
+    BAR="${BLUE}"
+
+    if (( FILLED > 0 )); then
+        BAR+="$(printf '━%.0s' $(seq 1 "$FILLED"))"
+    fi
+
+    BAR+="${GRAY}"
+
+    if (( EMPTY > 0 )); then
+        BAR+="$(printf '━%.0s' $(seq 1 "$EMPTY"))"
+    fi
+
+    BAR+="${RESET}"
+
+    # ─────────────────────────────────────────
+    # Status
+    # ─────────────────────────────────────────
+
+    if [[ "$STATUS" == "Playing" ]]; then
+        STATUS_ICON="󰏤"
+        STATUS_TEXT="Playing"
+    else
+        STATUS_ICON="󰏤"
+        STATUS_TEXT="Paused"
+    fi
+
+    # ─────────────────────────────────────────
+    # Update dynamic parts ONLY
+    # ─────────────────────────────────────────
+
+    printf '\033[9;35H'
+    echo -e "\033[K$BAR ${BLUE}${PERCENT}%${RESET}"
+
+    printf '\033[10;35H'
+    echo -e "\033[K${GRAY}${CURRENT}                         ${TOTAL}${RESET}"
+
+    printf '\033[14;35H'
+    echo -e "\033[K${BLUE}${STATUS_ICON} ${STATUS_TEXT}${RESET}                    ${GRAY}[q] quit${RESET}"
+
+    # ─────────────────────────────────────────
+    # Controls
+    # ─────────────────────────────────────────
+
+    read -rsn1 -t 0.5 KEY
+
+    case "$KEY" in
+        p)
+            playerctl play-pause
+            ;;
+
+        n)
+            playerctl next
+            ;;
+
+        b)
+            playerctl previous
+            ;;
+
+        q)
+            cleanup
+            ;;
+    esac
+
+done
