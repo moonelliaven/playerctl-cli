@@ -14,34 +14,7 @@ here's the example or the preview for the cli:
 * git
 * curl
 * [Playerctl](https://github.com/altdesktop/playerctl)
-
-Install Playerctl
-
-1. Fedora:
-
-```bash
-sudo dnf install playerctl
-```
-
-2. Arch Linux:
-
-```bash
-sudo pacman -S playerctl
-```
-
-3. Debian / Ubuntu:
-
-```bash
-sudo apt install playerctl
-```
-
-4. openSUSE:
-
-```bash
-sudo zypper install playerctl
-```
-
-5. or if you don't have the package from your distro's repo:
+* or if you don't have the package from your distro's repo:
 
 ```bash
 git clone https://github.com/altdesktop/playerctl.git
@@ -52,13 +25,18 @@ make
 sudo make install
 ```
 
-## Installation with install script
+## 1. Installation with install script
 1. Copy the code:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/moonelliaven/playerctl-cli/main/install.sh -o install.sh
 chmod +x install.sh
 ./install.sh
+```
+
+2. try run the code:
+```bash
+music
 ```
 
 ## Manual Installation (if the curl command above doesn't work for you)
@@ -98,10 +76,17 @@ Run:
 music
 ```
 
-Use the available commands to control your media player directly from the terminal.
+## Troubleshooting
+1. if the code doesn't work try run this command:
 
+```bash
+playerctl status
+```
 
-> The exact available commands depend on the current version of the `music` script.
+2. if the code still doesn't work, then you need to install playerctl:
+
+> Note that not all media players support MPRIS, but most common ones do, such as Spotify, VLC, and MPD.
+
 
 ## Built With:
 
